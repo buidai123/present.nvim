@@ -85,16 +85,31 @@ M.start_presentation = function(opts)
     vim.api.nvim_win_close(float.win, true)
   end, { buffer = float.buf })
 
+  local restore = {
+    cmdheight = {
+      original = vim.o.cmdheight,
+      present = 0,
+    },
+  }
+
+  -- set the option when the presentation load
+  for option, config in pairs(restore) do
+    vim.opt[option] = config.present
+  end
+
+  -- autocommand to restore original option on leave
+  vim.api.nvim_create_autocmd("BufLeave", {
+    buffer = float.buf,
+    callback = function()
+      for option, config in pairs(restore) do
+        vim.opt[option] = config.original
+      end
+    end,
+  })
+
   vim.api.nvim_buf_set_lines(float.buf, 0, -1, false, parsed.slides[1])
 end
 
 -- M.start_presentation({ bufnr = 71 })
-
--- vim.print(prase_slides({
---   "# Hello",
---   "How are you today?",
---   "# Hi",
---   "I'm pretty good, what about you?",
--- }))
 
 return M
