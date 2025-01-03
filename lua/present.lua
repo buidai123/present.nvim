@@ -20,49 +20,39 @@ end
 ---@field title string: The title of the slide
 ---@field body string[]: The body of slide
 
---- Pars markdown lines
+--- Parse markdown lines
 ---@param lines string[]; The lines in the buffer
 ---@return present.Slides
 local parse_slides = function(lines)
   local sls = { slides = {} }
 
-  local current_slide = {
-    title = "",
-    body = {},
-  }
+  local current_slide = nil
 
-  local separator = "^#"
+  local pattern = "^#"
   for _, line in ipairs(lines) do
-    if line:find(separator) then
-      if #current_slide.title > 0 then
+    if line:find(pattern) then
+      -- when find a new slide title, add current slide to sls.slides
+      if current_slide then
         table.insert(sls.slides, current_slide)
       end
-      current_slide = {
-        title = line,
-        body = {},
-      }
-    else
+      -- and create a new one
+      current_slide = { title = line, body = {} }
+    elseif current_slide then
       table.insert(current_slide.body, line)
     end
   end
 
+  -- add the last slide to sls.slides
   table.insert(sls.slides, current_slide)
 
   return sls
 end
 
-M.start_presentation = function(opts)
-  opts = opts or {}
-  opts.bufnr = opts.bufnr or 0
-
-  local lines = vim.api.nvim_buf_get_lines(opts.bufnr, 0, -1, false)
-  local parsed = parse_slides(lines)
-
+local create_window_configuration = function()
   local width = vim.o.columns
   local height = vim.o.lines
 
-  ---@type vim.api.keyset.win_config
-  local window = {
+  return {
     background = {
       relative = "editor",
       width = width,
@@ -92,15 +82,27 @@ M.start_presentation = function(opts)
       col = 8,
     },
   }
+end
 
-  local background_float = create_floating_window(window.background)
-  local header_float = create_floating_window(window.header)
-  local body_float = create_floating_window(window.body)
+M.start_presentation = function(opts)
+  opts = opts or {}
+  opts.bufnr = opts.bufnr or 0
+
+  local lines = vim.api.nvim_buf_get_lines(opts.bufnr, 0, -1, false)
+  local parsed = parse_slides(lines)
+  local current_slide = 1
+
+  local windows = create_window_configuration()
+
+  local background_float = create_floating_window(windows.background)
+  local header_float = create_floating_window(windows.header)
+  local body_float = create_floating_window(windows.body)
 
   vim.bo[header_float.buf].filetype = "markdown"
   vim.bo[body_float.buf].filetype = "markdown"
 
   local set_slide_content = function(idx)
+    local width = vim.o.columns
     local slide = parsed.slides[idx]
 
     local padding = string.rep(" ", (width - #slide.title) / 2)
@@ -110,7 +112,6 @@ M.start_presentation = function(opts)
     vim.api.nvim_buf_set_lines(body_float.buf, 0, -1, false, slide.body)
   end
 
-  local current_slide = 1
   vim.keymap.set("n", "n", function()
     current_slide = math.min(current_slide + 1, #parsed.slides)
     set_slide_content(current_slide)
@@ -151,8 +152,31 @@ M.start_presentation = function(opts)
   })
 
   set_slide_content(current_slide)
+
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = vim.api.nvim_create_augroup("present-resized", {}),
+    callback = function()
+      if
+        not (
+          vim.api.nvim_win_is_valid(background_float.win)
+          and vim.api.nvim_win_is_valid(header_float.win)
+          and vim.api.nvim_win_is_valid(body_float.win)
+        )
+      then
+        return
+      end
+
+      local updated = create_window_configuration()
+      vim.api.nvim_win_set_config(header_float.win, updated.header)
+      vim.api.nvim_win_set_config(body_float.win, updated.body)
+      vim.api.nvim_win_set_config(background_float.win, updated.background)
+
+      -- re-calculate the slide content
+      set_slide_content(current_slide)
+    end,
+  })
 end
 
-M.start_presentation({ bufnr = 47 })
+M.start_presentation({ bufnr = 39 })
 
 return M
