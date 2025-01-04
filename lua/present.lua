@@ -224,6 +224,8 @@ M.start_presentation = function(opts)
   })
 end
 
-M.start_presentation({ bufnr = 291 })
+-- M.start_presentation({ bufnr = 291 })
+
+M._parse_slides = parse_slides
 
 return M
