@@ -18,3 +18,7 @@ return {
 use `n` and `p` to navigate around slides
 
 `q` for quite the presentation
+
+# Credits
+
+Teej_dv
