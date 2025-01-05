@@ -2,6 +2,14 @@
 
 This is a markdown presentation for neovim
 
+# Feature
+
+Can execute the codeblocks in current slide
+
+```lua
+print("Hello World!")
+```
+
 # Usage
 
 for lazy.nvim

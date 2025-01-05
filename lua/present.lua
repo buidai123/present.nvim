@@ -22,6 +22,11 @@ end
 ---@class present.Slide
 ---@field title string: The title of the slide
 ---@field body string[]: The body of slide
+---@field blocks present.Block[]: A codeblock inside a slide
+
+---@class present.Block
+---@field language string: The language of the codeblock
+---@field body string: The body of the codeblock
 
 --- Parse markdown lines
 ---@param lines string[]; The lines in the buffer
@@ -30,6 +35,11 @@ local parse_slides = function(lines)
   local sls = { slides = {} }
 
   local current_slide = nil
+  local is_codeblock = false
+  local codeblock = {
+    language = nil,
+    body = "",
+  }
 
   local pattern = "^#"
   for _, line in ipairs(lines) do
@@ -39,9 +49,31 @@ local parse_slides = function(lines)
         table.insert(sls.slides, current_slide)
       end
       -- and create a new one
-      current_slide = { title = line, body = {} }
+      current_slide = {
+        title = line,
+        body = {},
+        blocks = {},
+      }
     elseif current_slide then
       table.insert(current_slide.body, line)
+
+      if line:find("^```") then
+        if not is_codeblock then
+          is_codeblock = true
+          codeblock.language = string.sub(line, 4)
+        else
+          is_codeblock = false
+          codeblock.body = vim.trim(codeblock.body)
+          table.insert(current_slide.blocks, codeblock)
+          codeblock = {
+            language = nil,
+            body = "",
+          } -- empty out codeblock just in case we have multiple codeblocks in a slide
+        end
+      elseif is_codeblock then
+        -- add everything inside the codeblock
+        codeblock.body = codeblock.body .. line .. "\n"
+      end
     end
   end
 
@@ -169,6 +201,60 @@ M.start_presentation = function(opts)
     vim.api.nvim_win_close(state.floats.body.win, true)
   end)
 
+  present_keymap("n", "x", function()
+    local slide = state.parsed.slides[state.current_slide]
+    -- TODO: make it so that users can exe the codeblock in different language other than lua
+    local cblock = slide.blocks[1]
+    if not cblock then
+      print("There's NO code block in this slide")
+      return
+    end
+
+    local original_print = print
+
+    -- table to campture the print
+    local output = { "", "# Code", "", "```" .. cblock.language }
+    vim.list_extend(output, vim.split(cblock.body, "\n"))
+    table.insert(output, "```")
+
+    -- redefine the print function
+    print = function(...)
+      local args = { ... }
+      local message = table.concat(vim.tbl_map(tostring, args), "\t")
+      table.insert(output, message)
+    end
+
+    local chunk = loadstring(cblock.body)
+    pcall(function()
+      table.insert(output, "")
+      table.insert(output, "# Output")
+      table.insert(output, "")
+      if chunk then
+        chunk()
+      else
+        table.insert(output, "<<<Failed to execute the codeblock!!!>>>")
+      end
+
+      print = original_print
+    end)
+    local buf = vim.api.nvim_create_buf(false, true)
+    local t_width = math.floor(vim.o.columns * 0.8)
+    local t_height = math.floor(vim.o.lines * 0.8)
+    vim.api.nvim_open_win(buf, true, {
+      relative = "editor",
+      style = "minimal",
+      noautocmd = true,
+      width = t_width,
+      height = t_height,
+      row = math.floor((vim.o.lines - t_height) / 2),
+      col = math.floor((vim.o.columns - t_width) / 2),
+      border = "rounded",
+    })
+
+    vim.bo[buf].filetype = "markdown"
+    vim.api.nvim_buf_set_lines(buf, 1, -1, false, output)
+  end)
+
   local restore = {
     cmdheight = {
       original = vim.o.cmdheight,
@@ -223,8 +309,6 @@ M.start_presentation = function(opts)
     end,
   })
 end
-
--- M.start_presentation({ bufnr = 291 })
 
 M._parse_slides = parse_slides
 
