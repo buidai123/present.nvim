@@ -1,13 +1,26 @@
 # present.nvim
 
-This is a markdown presentation for neovim
+This is a markdown presentation for Neovim
 
 # Feature
 
 Can execute the codeblocks in current slide
 
+## Execute lua
+
+type `X` to execute the blow code
+
 ```lua
 print("Hello World!")
+```
+
+## Even python
+
+Same for python
+
+```python
+name = "Bob"
+print(f"Hello {name}")
 ```
 
 # Usage

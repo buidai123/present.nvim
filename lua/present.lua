@@ -12,8 +12,60 @@ local function create_floating_window(config, enter)
   return { buf = buf, win = win }
 end
 
-M.setup = function()
-  -- do nothing
+---defult executor for lua
+---@param cblock present.Block
+local execute_lua_code = function(cblock)
+  local original_print = print
+
+  local output = {}
+
+  -- redefine the print function
+  print = function(...)
+    local args = { ... }
+    local message = table.concat(vim.tbl_map(tostring, args), "\t")
+    table.insert(output, message)
+  end
+
+  local chunk = loadstring(cblock.body)
+  pcall(function()
+    if chunk then
+      chunk()
+    else
+      table.insert(output, "<<<Failed to execute the codeblock!!!>>>")
+    end
+
+    return output
+  end)
+
+  print = original_print
+
+  return output
+end
+
+M.create_system_executor = function(program)
+  return function(cblock)
+    local tempfile = vim.fn.tempname()
+    vim.fn.writefile(vim.split(cblock.body, "\n"), tempfile)
+    local results = vim.system({ program, tempfile }, { text = true }):wait()
+    return vim.split(results.stdout, "\n")
+  end
+end
+
+local options = {
+  executors = {
+    lua = execute_lua_code,
+    python = M.create_system_executor("python"),
+  },
+}
+
+M.setup = function(opts)
+  opts = opts or {}
+  opts.executors = opts.executors or {}
+
+  opts.executors.lua = opts.executors.lua or execute_lua_code
+  opts.executors.python = opts.executors.python or M.create_system_executor("python")
+
+  options = opts
 end
 
 ---@class present.Slides
@@ -201,7 +253,7 @@ M.start_presentation = function(opts)
     vim.api.nvim_win_close(state.floats.body.win, true)
   end)
 
-  present_keymap("n", "x", function()
+  present_keymap("n", "X", function()
     local slide = state.parsed.slides[state.current_slide]
     -- TODO: make it so that users can exe the codeblock in different language other than lua
     local cblock = slide.blocks[1]
@@ -210,33 +262,24 @@ M.start_presentation = function(opts)
       return
     end
 
-    local original_print = print
+    local executor = options.executors[cblock.language]
+    if not executor then
+      print("NO valid executor for this language")
+      return
+    end
 
     -- table to campture the print
-    local output = { "", "# Code", "", "```" .. cblock.language }
+    local output = { "# Code", "", "```" .. cblock.language }
     vim.list_extend(output, vim.split(cblock.body, "\n"))
     table.insert(output, "```")
 
-    -- redefine the print function
-    print = function(...)
-      local args = { ... }
-      local message = table.concat(vim.tbl_map(tostring, args), "\t")
-      table.insert(output, message)
-    end
+    table.insert(output, "")
+    table.insert(output, "# Output")
+    table.insert(output, "")
+    table.insert(output, "```")
+    vim.list_extend(output, executor(cblock))
+    table.insert(output, "```")
 
-    local chunk = loadstring(cblock.body)
-    pcall(function()
-      table.insert(output, "")
-      table.insert(output, "# Output")
-      table.insert(output, "")
-      if chunk then
-        chunk()
-      else
-        table.insert(output, "<<<Failed to execute the codeblock!!!>>>")
-      end
-
-      print = original_print
-    end)
     local buf = vim.api.nvim_create_buf(false, true)
     local t_width = math.floor(vim.o.columns * 0.8)
     local t_height = math.floor(vim.o.lines * 0.8)
