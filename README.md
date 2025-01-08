@@ -19,6 +19,7 @@ print("Hello World!")
 Same for python
 
 ```python
+# this is a python comment
 name = "Bob"
 print(f"Hello {name}")
 ```

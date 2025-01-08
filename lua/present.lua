@@ -95,7 +95,7 @@ local parse_slides = function(lines)
 
   local pattern = "^#"
   for _, line in ipairs(lines) do
-    if line:find(pattern) then
+    if line:find(pattern) and not is_codeblock then
       -- when find a new slide title, add current slide to sls.slides
       if current_slide then
         table.insert(sls.slides, current_slide)
