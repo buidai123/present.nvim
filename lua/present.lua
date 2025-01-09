@@ -9,6 +9,13 @@ local function create_floating_window(config, enter)
 
   local win = vim.api.nvim_open_win(buf, enter or false, config)
 
+  local bg_color = M.options.colors.background or vim.api.nvim_get_hl(0, { name = "Normal" }).bg or "#000000"
+
+  vim.api.nvim_set_option_value("winhl", "NormalFloat:PresentNormalFloat,FloatBorder:PresentFloatBorder", { win = win })
+
+  vim.api.nvim_set_hl(0, "PresentNormalFloat", { bg = bg_color })
+  vim.api.nvim_set_hl(0, "PresentFloatBorder", { bg = bg_color })
+
   return { buf = buf, win = win }
 end
 
@@ -51,10 +58,14 @@ M.create_system_executor = function(program)
   end
 end
 
-local options = {
+M.options = {
   executors = {
     lua = execute_lua_code,
     python = M.create_system_executor("python"),
+  },
+  colors = {
+    background = nil, -- nil means use theme background
+    border = nil,
   },
 }
 
@@ -65,7 +76,7 @@ M.setup = function(opts)
   opts.executors.lua = opts.executors.lua or execute_lua_code
   opts.executors.python = opts.executors.python or M.create_system_executor("python")
 
-  options = opts
+  M.options = vim.tbl_extend("force", M.options, opts)
 end
 
 ---@class present.Slides
@@ -262,7 +273,7 @@ M.start_presentation = function(opts)
       return
     end
 
-    local executor = options.executors[cblock.language]
+    local executor = M.options.executors[cblock.language]
     if not executor then
       print("NO valid executor for this language")
       return
