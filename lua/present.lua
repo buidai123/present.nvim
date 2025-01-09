@@ -292,9 +292,9 @@ M.start_presentation = function(opts)
     table.insert(output, "```")
 
     local buf = vim.api.nvim_create_buf(false, true)
-    local t_width = math.floor(vim.o.columns * 0.8)
-    local t_height = math.floor(vim.o.lines * 0.8)
-    vim.api.nvim_open_win(buf, true, {
+    local t_width = math.floor(vim.o.columns * 0.5)
+    local t_height = math.floor(vim.o.lines * 0.5)
+    local win = vim.api.nvim_open_win(buf, true, {
       relative = "editor",
       style = "minimal",
       noautocmd = true,
