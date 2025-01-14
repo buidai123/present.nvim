@@ -69,7 +69,7 @@ M.options = {
   },
 }
 
-M.setup = function(opts)
+local setup = function(opts)
   opts = opts or {}
   opts.executors = opts.executors or {}
 
@@ -78,6 +78,8 @@ M.setup = function(opts)
 
   M.options = vim.tbl_extend("force", M.options, opts)
 end
+
+M.setup = setup
 
 ---@class present.Slides
 ---@field slides present.Slide[]: The slides after praseing the file
@@ -146,13 +148,20 @@ local parse_slides = function(lines)
   return sls
 end
 
-local create_window_configuration = function()
+local create_window_configuration = function(title)
   local width = vim.o.columns
   local height = vim.o.lines
 
-  local header_height = 1 + 2 -- its height + borders
+  local header_height = 2 + 2 -- its height + borders
   local footer_height = 1 + 1 -- its height + the uper border
   local body_height = height - header_height - footer_height
+
+  local body_width = math.floor(width * 0.5)
+  local body_col = math.floor((width - body_width) / 2)
+
+  local title_width = vim.fn.strdisplaywidth(title)
+  local header_width = math.min(title_width, width)
+  local header_col = math.floor((width - header_width) / 2)
 
   return {
     background = {
@@ -166,23 +175,23 @@ local create_window_configuration = function()
     },
     header = {
       relative = "editor",
-      width = width,
-      height = 1,
-      border = "rounded",
-      col = 0,
+      width = header_width,
+      height = 2,
+      border = { " ", " ", " ", " ", " ", " ", " ", " " },
+      col = header_col,
       row = 0,
       style = "minimal",
       zindex = 100,
     },
     body = {
       relative = "editor",
-      width = width - 8,
+      width = body_width,
       -- height = height - 5,
       height = body_height,
       style = "minimal",
       border = { " ", " ", " ", " ", " ", " ", " ", " " },
-      row = 4,
-      col = 8,
+      row = 5,
+      col = body_col,
     },
     footer = {
       relative = "editor",
@@ -225,7 +234,7 @@ M.start_presentation = function(opts)
   state.current_slide = 1
   state.title = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(opts.bufnr), ":t")
 
-  local windows = create_window_configuration()
+  local windows = create_window_configuration(state.parsed.slides[state.current_slide].title)
 
   state.floats.background = create_floating_window(windows.background)
   state.floats.header = create_floating_window(windows.header)
@@ -237,13 +246,13 @@ M.start_presentation = function(opts)
   end)
 
   local set_slide_content = function(idx)
-    local width = vim.o.columns
     local slide = state.parsed.slides[idx]
+    local updated_header = create_window_configuration(slide.title).header
 
-    local padding = string.rep(" ", (width - #slide.title) / 2)
-    -- redefine the title with padding
-    local title = padding .. slide.title
-    vim.api.nvim_buf_set_lines(state.floats.header.buf, 0, -1, false, { title })
+    -- update header window
+    vim.api.nvim_win_set_config(state.floats.header.win, updated_header)
+
+    vim.api.nvim_buf_set_lines(state.floats.header.buf, 0, -1, false, { slide.title })
     vim.api.nvim_buf_set_lines(state.floats.body.buf, 0, -1, false, slide.body)
 
     local footer = string.format(" %d / %d | %s", state.current_slide, #state.parsed.slides, state.title)
@@ -355,7 +364,8 @@ M.start_presentation = function(opts)
         return
       end
 
-      local updated = create_window_configuration()
+      local current_slide = state.parsed.slides[state.current_slide]
+      local updated = create_window_configuration(current_slide.title)
 
       foreach_float(function(name, float)
         local config_name = name:gsub("_float", "")
